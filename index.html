@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Petualangan Penjelajah Sudut</title>
+    <style>
+        /* ==========================================================
+           1. PENGATURAN CSS DASAR & VARIABEL (UI/UX)
+           ========================================================== */
+        :root {
+            --primary: #008CBA;    /* Biru laut */
+            --secondary: #4CAF50;  /* Hijau pulau */
+            --accent: #FFC107;     /* Kuning harta karun */
+            --danger: #f44336;     /* Merah salah */
+            --text-dark: #333;
+            --text-light: #fff;
+            --bg-ocean: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            --font-main: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none; /* Mencegah seleksi teks saat tap di HP */
+        }
+
+        body {
+            font-family: var(--font-main);
+            background: #222; /* Latar belakang luar kontainer */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            color: var(--text-dark);
+        }
+
+        /* Overlay Kecerahan Layar */
+        #brightness-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0,0,0,0);
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        /* Kontainer Utama Game (Aspect Ratio untuk menjaga bentuk di TV/Laptop) */
+        #game-container {
+            width: 100vw;
+            height: 100vh;
+            max-width: 900px;
+            max-height: 1600px; /* Batas tinggi untuk tablet/HP */
+            background: var(--bg-ocean);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Mode Fullscreen (Laptop/TV) */
+        @media (min-aspect-ratio: 4/3) {
+            #game-container {
+                height: 90vh;
+                width: 90vh * 1.6; /* 16:9 rasio simulasi */
+                border-radius: 20px;
+            }
+        }
+
+        /* ==========================================================
+           2. KOMPONEN LAYAR (SCREENS)
+           ========================================================== */
+        .screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            transition: opacity 0.5s ease;
+            background: var(--bg-ocean);
+            z-index: 10;
+        }
+
+        .hidden {
+            display: none !important;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* ==========================================================
+           3. TIPOGRAFI & TOMBOL
+           ========================================================== */
+        h1 { font-size: 2.5rem; color: #fff; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); text-align: center; margin-bottom: 20px; line-height: 1.2;}
+        h2 { font-size: 2rem; color: #fff; margin-bottom: 15px; text-shadow: 1px 1px 3px rgba(0,0,0,0.5);}
+        p { font-size: 1.2rem; margin-bottom: 15px; text-align: center; color: #fff;}
+
+        .btn {
+            background-color: var(--accent);
+            color: var(--text-dark);
+            border: 4px solid #b38600;
+            border-radius: 15px;
+            padding: 15px 30px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 10px;
+            box-shadow: 0 5px 0 #b38600, 0 10px 10px rgba(0,0,0,0.3);
+            transition: transform 0.1s, box-shadow 0.1s;
+            text-transform: uppercase;
+        }
+
+        .btn:active {
+            transform: translateY(5px);
+            box-shadow: 0 0px 0 #b38600, 0 5px 5px rgba(0,0,0,0.3);
+        }
+
+        .btn-green { background-color: var(--secondary); border-color: #2e7d32; color: white; box-shadow: 0 5px 0 #2e7d32; }
+        .btn-green:active { box-shadow: 0 0px 0 #2e7d32; }
+        .btn-blue { background-color: var(--primary); border-color: #005f7a; color: white; box-shadow: 0 5px 0 #005f7a; }
+        .btn-blue:active { box-shadow: 0 0px 0 #005f7a; }
+
+        /* ==========================================================
+           4. HUD (HEAD-UP DISPLAY) & GAMEPLAY UI
+           ========================================================== */
+        #hud {
+            width: 100%;
+            padding: 10px 20px;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+            z-index: 20;
+        }
+
+        .hud-item { display: flex; align-items: center; gap: 5px; }
+        #lives { color: #ff4d4d; font-size: 1.5rem;}
+        
+        #progress-container {
+            width: 100%; height: 10px; background: #ddd; position: absolute; top: 0; left: 0;
+        }
+        #progress-bar {
+            height: 100%; background: var(--secondary); width: 0%; transition: width 0.3s;
+        }
+
+        /* Area Pertanyaan & Canvas */
+        #question-area {
+            flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%;
+        }
+        
+        #question-text {
+            background: rgba(255,255,255,0.9); color: var(--text-dark); padding: 15px; border-radius: 10px; margin-bottom: 20px; text-align: center; width: 90%; font-size: 1.3rem; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        /* Canvas Responsif */
+        canvas {
+            background: rgba(255,255,255,0.8);
+            border-radius: 15px;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.2), 0 5px 15px rgba(0,0,0,0.3);
+            max-width: 95%;
+            max-height: 40vh; /* Membatasi tinggi agar tidak menutupi tombol di HP */
+            object-fit: contain;
+        }
+
+        /* Opsi Jawaban (Multiple Choice) */
+        #options-container {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 15px; width: 90%; max-width: 500px; margin-top: 20px;
+        }
+        .option-btn {
+            background: white; border: 3px solid var(--primary); padding: 15px; font-size: 1.5rem; font-weight: bold; border-radius: 10px; cursor: pointer; transition: 0.2s; color: var(--primary);
+        }
+        .option-btn:hover { background: var(--primary); color: white; }
+
+        /* Input untuk Level 4 */
+        #input-container { display: none; margin-top: 20px; text-align: center;}
+        #angle-input {
+            font-size: 2rem; padding: 10px; width: 150px; text-align: center; border: 3px solid var(--primary); border-radius: 10px; outline: none; margin-bottom: 10px;
+        }
+
+        /* ==========================================================
+           5. PETA LEVEL (ISLANDS)
+           ========================================================== */
+        #map-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;
+        }
+        .level-btn {
+            width: 100px; height: 100px; border-radius: 50%; background: #8B4513; border: 5px solid #D2B48C; color: white; font-size: 1.5rem; font-weight: bold; display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative;
+        }
+        .level-btn::after {
+            content: "🏝️"; position: absolute; font-size: 3rem; opacity: 0.5; z-index: -1;
+        }
+        .level-locked { filter: grayscale(100%); cursor: not-allowed; opacity: 0.7; }
+        .level-locked::before { content: "🔒"; position: absolute; font-size: 2rem; z-index: 2; }
+
+        /* ==========================================================
+           6. FEEDBACK MODAL (PEMBELAJARAN)
+           ========================================================== */
+        #feedback-modal {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: white; padding: 30px; border-radius: 20px; text-align: center; width: 90%; max-width: 500px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 100; display: none;
+        }
+        .feedback-title { font-size: 2rem; margin-bottom: 10px; font-weight: bold;}
+        .correct-text { color: var(--secondary); }
+        .wrong-text { color: var(--danger); }
+        .feedback-steps { text-align: left; background: #f0f8ff; padding: 15px; border-radius: 10px; margin: 15px 0; font-size: 1.1rem; color: #333;}
+        .feedback-steps ol { padding-left: 20px; margin-top: 10px;}
+        .feedback-steps li { margin-bottom: 8px;}
+
+        /* ==========================================================
+           7. ANIMASI
+           ========================================================== */
+        @keyframes shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            50% { transform: translateX(10px); }
+            75% { transform: translateX(-10px); }
+            100% { transform: translateX(0); }
+        }
+        .shake { animation: shake 0.4s; }
+
+        @keyframes bounce {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        .bounce { animation: bounce 0.3s; }
+
+        /* Pengaturan Ekstra */
+        .controls-top {
+            position: absolute; top: 10px; right: 10px; display: flex; gap: 10px; z-index: 50;
+        }
+        .icon-btn {
+            background: rgba(0,0,0,0.5); color: white; border: none; border-radius: 50%; width: 40px; height: 40px; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Overlay untuk pengatur kecerahan -->
+    <div id="brightness-overlay"></div>
+
+    <div id="game-container">
+        <!-- Progress Bar Global -->
+        <div id="progress-container"><div id="progress-bar"></div></div>
+
+        <!-- Tombol Kontrol Global -->
+        <div class="controls-top">
+            <button class="icon-btn" onclick="toggleFullscreen()" title="Fullscreen">📺</button>
+            <button class="icon-btn" onclick="adjustBrightness()" title="Atur Kecerahan">💡</button>
+        </div>
+
+        <!-- ==========================================
+             LAYAR 1: MENU UTAMA
+             ========================================== -->
+        <div id="menu-screen" class="screen">
+            <h1>🦜 Petualangan<br>Penjelajah Sudut 🏝️</h1>
+            <p>Bantu sang bajak laut menemukan harta karun dengan menguasai ilmu sudut dan busur derajat!</p>
+            <br>
+            <button class="btn" onclick="startGame(1)">Main 1 Pemain</button>
+            <button class="btn btn-blue" onclick="startGame(2)">Battle 2 Pemain (Gantian)</button>
+            <p style="font-size: 0.9rem; margin-top:20px; opacity: 0.8;">Fase C - Matematika Kelas 5 SD</p>
+        </div>
+
+        <!-- ==========================================
+             LAYAR 2: PETA PULAU (PILIH LEVEL)
+             ========================================== -->
+        <div id="map-screen" class="screen hidden">
+            <h2>Peta Harta Karun</h2>
+            <p id="player-turn-text"></p>
+            <div id="map-grid">
+                <div class="level-btn" onclick="loadLevel(1)" id="btn-lvl-1">1</div>
+                <div class="level-btn level-locked" onclick="loadLevel(2)" id="btn-lvl-2">2</div>
+                <div class="level-btn level-locked" onclick="loadLevel(3)" id="btn-lvl-3">3</div>
+                <div class="level-btn level-locked" onclick="loadLevel(4)" id="btn-lvl-4">4</div>
+                <div class="level-btn level-locked" onclick="loadLevel(5)" id="btn-lvl-5">5</div>
+                <div class="level-btn level-locked" onclick="loadLevel(6)" id="btn-lvl-6" style="background:#B22222;">6</div>
+            </div>
+            <button class="btn btn-blue" style="margin-top: 30px; font-size: 1rem;" onclick="showScreen('menu-screen')">Kembali ke Menu</button>
+        </div>
+
+        <!-- ==========================================
+             LAYAR 3: GAMEPLAY AREA
+             ========================================== -->
+        <div id="play-screen" class="screen hidden" style="padding: 0; justify-content: flex-start;">
+            <!-- HUD -->
+            <div id="hud">
+                <div class="hud-item" id="level-indicator">Lvl: 1</div>
+                <div class="hud-item">Waktu: <span id="timer-display">--</span>s</div>
+                <div class="hud-item">Skor: <span id="score-display">0</span></div>
+                <div class="hud-item" id="lives">❤️❤️❤️</div>
+            </div>
+
+            <!-- Area Soal -->
+            <div id="question-area">
+                <div id="question-text">Pertanyaan akan muncul di sini</div>
+                
+                <!-- Canvas Utama untuk Menggambar Busur dan Sudut -->
+                <canvas id="gameCanvas" width="600" height="400"></canvas>
+                
+                <!-- Canvas Level 1 (Pilihan Gambar) -->
+                <div id="lvl1-canvas-container" style="display:none; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <canvas id="c1" width="150" height="150" class="option-btn" onclick="checkAnswerLvl1(0)"></canvas>
+                    <canvas id="c2" width="150" height="150" class="option-btn" onclick="checkAnswerLvl1(1)"></canvas>
+                    <canvas id="c3" width="150" height="150" class="option-btn" onclick="checkAnswerLvl1(2)"></canvas>
+                    <canvas id="c4" width="150" height="150" class="option-btn" onclick="checkAnswerLvl1(3)"></canvas>
+                </div>
+
+                <!-- Input Pilihan Ganda (Lvl 2, 3, 5, 6) -->
+                <div id="options-container">
+                    <button class="option-btn" id="opt-1" onclick="checkAnswer(this.innerText)">A</button>
+                    <button class="option-btn" id="opt-2" onclick="checkAnswer(this.innerText)">B</button>
+                    <button class="option-btn" id="opt-3" onclick="checkAnswer(this.innerText)">C</button>
+                    <button class="option-btn" id="opt-4" onclick="checkAnswer(this.innerText)">D</button>
+                </div>
+
+                <!-- Input Ketik (Lvl 4) -->
+                <div id="input-container">
+                    <input type="number" id="angle-input" placeholder="0" min="0" max="180"> <span style="font-size:2rem; color:white;">&deg;</span><br>
+                    <button class="btn btn-green" onclick="checkInputAnswer()">Jawab</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             MODAL FEEDBACK (PEMBELAJARAN)
+             ========================================== -->
+        <div id="feedback-modal">
+            <div id="feedback-title" class="feedback-title correct-text">Hebat!</div>
+            <div id="feedback-message" style="font-size: 1.2rem; margin-bottom: 10px;">Kamu menjawab dengan benar.</div>
+            
+            <!-- Langkah penyelesaian muncul jika salah -->
+            <div id="feedback-tutorial" class="feedback-steps hidden">
+                <strong>Mari kita ingat kembali caranya:</strong>
+                <ol>
+                    <li>Letakkan titik pusat busur derajat pada titik sudut.</li>
+                    <li>Sejajarkan garis dasar busur dengan salah satu kaki sudut (di angka 0°).</li>
+                    <li>Lihat angka pada skala (dalam atau luar) yang dilewati oleh kaki sudut lainnya.</li>
+                    <li>Itulah besar sudutnya! (Jawaban yang benar: <span id="correct-ans-span"></span>°)</li>
+                </ol>
+            </div>
+            
+            <button class="btn btn-blue" onclick="nextQuestion()">Lanjut</button>
+        </div>
+
+        <!-- ==========================================
+             LAYAR Akhir & SERTIFIKAT
+             ========================================== -->
+        <div id="end-screen" class="screen hidden">
+            <h1 id="end-title">Game Selesai!</h1>
+            <div style="background: rgba(255,255,255,0.9); padding: 20px; border-radius: 15px; color: var(--text-dark); text-align: center; margin-bottom: 20px; width: 90%; max-width: 500px;">
+                <h2 id="end-badge" style="color: var(--accent); text-shadow: none;">Badge</h2>
+                <p style="color: #333; font-size: 1.2rem; margin: 5px 0;">Skor Total: <strong id="end-score" style="font-size: 1.5rem;">0</strong></p>
+                <p style="color: #333; margin: 5px 0;">Benar: <span id="end-correct" style="color: green; font-weight:bold;">0</span> | Salah: <span id="end-wrong" style="color: red; font-weight:bold;">0</span></p>
+                <p style="color: #333; margin: 5px 0;">Akurasi: <span id="end-accuracy">0</span>%</p>
+                <p style="color: #333; margin: 5px 0;">Predikat: <strong id="end-predicate" style="color: var(--primary);">Bagus</strong></p>
+            </div>
+            
+            <!-- Canvas tersembunyi untuk generate gambar sertifikat -->
+            <canvas id="certCanvas" width="800" height="600" style="display:none;"></canvas>
+            
+            <button class="btn btn-green" onclick="downloadCertificate()">Unduh Sertifikat</button>
+            <button class="btn" id="btn-next-player" onclick="switchPlayer()" style="display:none;">Giliran Pemain 2</button>
+            <button class="btn btn-blue" onclick="location.reload()">Main Lagi</button>
+        </div>
+
+    </div>
+
+    <!-- =========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================= -->
+    <script>
+        /* --- STATE VARIABEL --- */
+        let state = {
+            mode: 1, // 1: Single, 2: Battle
+            currentPlayer: 1,
+            maxUnlockedLevel: 1,
+            currentLevel: 1,
+            score: [0, 0, 0], // Index 0 tidak dipakai, 1 untuk P1, 2 untuk P2
+            lives: 3,
+            combo: 0,
+            stats: { correct: 0, wrong: 0, totalTime: 0 },
+            currentQuestion: 0,
+            maxQuestions: 5, // Soal per level (kecuali level 6)
+            timer: 0,
+            timerInterval: null,
+            targetAngle: 0,
+            lvl1Angles: [],
+            isTimerActive: false,
+            brightness: 0 // 0, 1, 2 (gelap ke terang)
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let audioCtx; // Web Audio API
+
+        /* ==================================================
+           AUDIO SYNTHESIS (Tanpa file eksternal)
+           ================================================== */
+        function initAudio() {
+            if(!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playTone(freq, type, duration, vol=0.1) {
+            if(!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+            
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+
+        const sound = {
+            correct: () => { playTone(600, 'sine', 0.1); setTimeout(()=>playTone(800, 'sine', 0.2), 100); },
+            wrong: () => { playTone(200, 'sawtooth', 0.3, 0.2); },
+            click: () => { playTone(400, 'square', 0.05, 0.05); },
+            win: () => { 
+                [523, 659, 783, 1046].forEach((f, i) => setTimeout(() => playTone(f, 'sine', 0.3, 0.1), i*150));
+            },
+            levelUp: () => { playTone(440, 'triangle', 0.1); setTimeout(()=>playTone(660, 'triangle', 0.3), 100); }
+        };
+
+        /* ==================================================
+           UI & NAVIGASI
+           ================================================== */
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        function startGame(mode) {
+            initAudio();
+            sound.click();
+            state.mode = mode;
+            state.currentPlayer = 1;
+            resetPlayerStats();
+            updateMapUI();
+            document.getElementById('player-turn-text').innerText = mode === 2 ? "Giliran: Pemain 1" : "";
+            showScreen('map-screen');
+        }
+
+        function resetPlayerStats() {
+            state.score[state.currentPlayer] = 0;
+            state.lives = 3;
+            state.stats = { correct: 0, wrong: 0, totalTime: 0 };
+            state.maxUnlockedLevel = 1;
+            updateHUD();
+        }
+
+        function updateMapUI() {
+            for(let i=1; i<=6; i++) {
+                const btn = document.getElementById(`btn-lvl-${i}`);
+                if(i <= state.maxUnlockedLevel) {
+                    btn.classList.remove('level-locked');
+                } else {
+                    btn.classList.add('level-locked');
+                }
+            }
+        }
+
+        /* Fitur Kecerahan & Fullscreen */
+        function adjustBrightness() {
+            state.brightness = (state.brightness + 1) % 3;
+            const overlay = document.getElementById('brightness-overlay');
+            if(state.brightness === 0) overlay.style.backgroundColor = "rgba(0,0,0,0)";
+            if(state.brightness === 1) overlay.style.backgroundColor = "rgba(0,0,0,0.3)";
+            if(state.brightness === 2) overlay.style.backgroundColor = "rgba(0,0,0,0.6)";
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log(`Error fullscreen: ${err.message}`);
+                });
+            } else {
+                if (document.exitFullscreen) { document.exitFullscreen(); }
+            }
+        }
+
+        function updateHUD() {
+            document.getElementById('score-display').innerText = state.score[state.currentPlayer];
+            document.getElementById('lives').innerText = '❤️'.repeat(state.lives) + '🖤'.repeat(3 - state.lives);
+            document.getElementById('level-indicator').innerText = `Lvl: ${state.currentLevel} ${state.mode===2 ? '(P'+state.currentPlayer+')':''}`;
+        }
+
+        /* ==================================================
+           CANVAS ENGINE (Menggambar Busur & Sudut)
+           ================================================== */
+        // Utilitas untuk menggambar sudut
+        function drawAngleLines(context, cx, cy, radius, angleDegree, rotationDegree = 0) {
+            const radRot = rotationDegree * Math.PI / 180;
+            const radAng = (angleDegree + rotationDegree) * Math.PI / 180;
+            
+            context.beginPath();
+            context.moveTo(cx, cy);
+            // Garis Dasar (0 derajat dari rotasi)
+            context.lineTo(cx + radius * Math.cos(radRot), cy - radius * Math.sin(radRot));
+            context.moveTo(cx, cy);
+            // Garis Sudut (berlawanan arah jarum jam di canvas y terbalik, jadi kita -sin)
+            context.lineTo(cx + radius * Math.cos(radAng), cy - radius * Math.sin(radAng));
+            
+            context.strokeStyle = "#e74c3c"; // Merah
+            context.lineWidth = 4;
+            context.lineCap = "round";
+            context.stroke();
+
+            // Gambar busur kecil penanda sudut
+            context.beginPath();
+            // Arc pada canvas menggunakan radian positif searah jarum jam. 
+            // Karena kita menggunakan sistem kuadran matematika standar (atas positif), kita harus pintar menyesuaikan arah arc.
+            let startArc = -radRot;
+            let endArc = -radAng;
+            if(startArc > endArc) { let temp = startArc; startArc = endArc; endArc = temp; }
+            context.arc(cx, cy, 30, endArc, startArc, false); 
+            context.strokeStyle = "rgba(231, 76, 60, 0.5)";
+            context.lineWidth = 15;
+            context.stroke();
+        }
+
+        // Fungsi utama menggambar busur derajat
+        function drawProtractor(context, cx, cy, radius, rotationDegree = 0) {
+            context.save();
+            context.translate(cx, cy);
+            context.rotate(-rotationDegree * Math.PI / 180); // Putar seluruh busur
+            
+            // Bentuk setengah lingkaran
+            context.beginPath();
+            context.arc(0, 0, radius, Math.PI, 0, false);
+            context.lineTo(radius + 20, 0); // Garis bawah lebih panjang dikit
+            context.lineTo(-(radius + 20), 0);
+            context.closePath();
+            
+            // Fill warna transparan/kaca
+            context.fillStyle = "rgba(173, 216, 230, 0.4)"; // LightBlue transparan
+            context.fill();
+            context.strokeStyle = "#2c3e50";
+            context.lineWidth = 2;
+            context.stroke();
+
+            // Titik pusat
+            context.beginPath();
+            context.arc(0, 0, 5, 0, Math.PI*2);
+            context.fillStyle = "#2c3e50";
+            context.fill();
+            
+            // Garis dasar (baseline)
+            context.beginPath();
+            context.moveTo(-radius + 10, 0);
+            context.lineTo(radius - 10, 0);
+            context.strokeStyle = "#2c3e50";
+            context.lineWidth = 1;
+            context.stroke();
+
+            // Skala garis dan angka
+            context.textAlign = "center";
+            context.textBaseline = "middle";
+            context.fillStyle = "#333";
+            
+            for(let i = 0; i <= 180; i++) {
+                let rad = i * Math.PI / 180;
+                let xOut = radius * Math.cos(rad);
+                let yOut = -radius * Math.sin(rad); // Negatif karena y di canvas turun
+                
+                let lineLen = 5; // Garis tiap 1 derajat
+                if(i % 10 === 0) lineLen = 15; // Garis utama
+                else if(i % 5 === 0) lineLen = 10; // Garis tengah
+                
+                let xIn = (radius - lineLen) * Math.cos(rad);
+                let yIn = -(radius - lineLen) * Math.sin(rad);
+                
+                context.beginPath();
+                context.moveTo(xOut, yOut);
+                context.lineTo(xIn, yIn);
+                context.lineWidth = (i % 10 === 0) ? 2 : 1;
+                context.stroke();
+                
+                // Teks tiap 10 derajat (skala luar dan dalam)
+                if(i % 10 === 0) {
+                    context.font = "bold 12px Arial";
+                    // Skala luar (0 dari kanan ke kiri)
+                    let tx1 = (radius - 25) * Math.cos(rad);
+                    let ty1 = -(radius - 25) * Math.sin(rad);
+                    context.fillText(i.toString(), tx1, ty1);
+                    
+                    // Skala dalam (0 dari kiri ke kanan)
+                    context.font = "10px Arial";
+                    let tx2 = (radius - 40) * Math.cos(rad);
+                    let ty2 = -(radius - 40) * Math.sin(rad);
+                    context.fillText((180 - i).toString(), tx2, ty2);
+                }
+            }
+            context.restore();
+        }
+
+        function clearCanvas(c = canvas, context = ctx) {
+            context.clearRect(0, 0, c.width, c.height);
+        }
+
+        /* ==================================================
+           LOGIKA GAMEPLAY
+           ================================================== */
+        function loadLevel(lvl) {
+            if (lvl > state.maxUnlockedLevel) {
+                sound.wrong();
+                return;
+            }
+            sound.click();
+            state.currentLevel = lvl;
+            state.currentQuestion = 0;
+            
+            if(lvl === 6) {
+                state.maxQuestions = 999; // Challenge mode
+                state.timer = 90; // 90 detik
+            } else {
+                state.maxQuestions = 5;
+                state.timer = 30; // 30 detik per soal normal
+            }
+            
+            showScreen('play-screen');
+            updateHUD();
+            nextQuestionLogic();
+        }
+
+        function startTimer() {
+            clearInterval(state.timerInterval);
+            document.getElementById('timer-display').innerText = state.timer;
+            state.isTimerActive = true;
+            
+            state.timerInterval = setInterval(() => {
+                if(!state.isTimerActive) return;
+                state.timer--;
+                document.getElementById('timer-display').innerText = state.timer;
+                
+                if(state.timer <= 0) {
+                    clearInterval(state.timerInterval);
+                    handleTimeOut();
+                }
+            }, 1000);
+        }
+
+        function getRandomAngle(step = 5, min = 10, max = 175) {
+            let options = [];
+            for(let i=min; i<=max; i+=step) options.push(i);
+            return options[Math.floor(Math.random() * options.length)];
+        }
+
+        function generateOptions(correctAnswer) {
+            let opts = new Set([correctAnswer]);
+            while(opts.size < 4) {
+                let w = correctAnswer + (Math.floor(Math.random() * 6) - 3) * 5; // Rentang dekat
+                if(w > 0 && w <= 180 && w !== correctAnswer) opts.add(w);
+            }
+            let arr = Array.from(opts);
+            return arr.sort(() => Math.random() - 0.5); // Acak posisi
+        }
+
+        function nextQuestionLogic() {
+            state.currentQuestion++;
+            
+            // Cek apakah level selesai
+            if(state.currentLevel !== 6 && state.currentQuestion > state.maxQuestions) {
+                levelComplete();
+                return;
+            }
+
+            // Reset UI
+            document.getElementById('lvl1-canvas-container').style.display = 'none';
+            document.getElementById('options-container').style.display = 'none';
+            document.getElementById('input-container').style.display = 'none';
+            canvas.style.display = 'block';
+            document.getElementById('angle-input').value = '';
+            
+            clearCanvas();
+
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2 + 50;
+            const radius = 150;
+
+            let qText = "";
+
+            // LOGIKA PER LEVEL
+            switch(state.currentLevel) {
+                case 1: // Level 1: Pilih 90 derajat dari 4 gambar
+                    state.timer = 30;
+                    canvas.style.display = 'none';
+                    document.getElementById('lvl1-canvas-container').style.display = 'grid';
+                    qText = "Klik gambar sudut yang besarnya 90° (Sudut Siku-siku)";
+                    
+                    state.targetAngle = 90;
+                    let angles = [30, 90, 120, 60].sort(() => Math.random() - 0.5);
+                    state.lvl1Angles = angles;
+                    
+                    for(let i=0; i<4; i++) {
+                        let c = document.getElementById(`c${i+1}`);
+                        let cx_sub = c.getContext('2d');
+                        clearCanvas(c, cx_sub);
+                        drawAngleLines(cx_sub, c.width/2, c.height/2+20, 50, angles[i], 0);
+                    }
+                    break;
+
+                case 2: // Level 2: Lihat sudut, pilih jawaban (PG)
+                    state.timer = 20;
+                    state.targetAngle = getRandomAngle(5, 30, 150);
+                    qText = "Berapa perkiraan besar sudut di bawah ini?";
+                    drawAngleLines(ctx, cx, cy, radius, state.targetAngle, 0);
+                    
+                    showMultipleChoice();
+                    break;
+
+                case 3: // Level 3: Busur derajat normal + Sudut (PG)
+                    state.timer = 30;
+                    state.targetAngle = getRandomAngle(1, 20, 160); // Bisa angka tidak genap 5
+                    qText = "Baca hasil pengukuran sudut pada busur derajat berikut!";
+                    drawProtractor(ctx, cx, cy, radius, 0);
+                    drawAngleLines(ctx, cx, cy, radius-20, state.targetAngle, 0);
+                    
+                    showMultipleChoice();
+                    break;
+
+                case 4: // Level 4: Ketik jawaban
+                    state.timer = 40;
+                    state.targetAngle = getRandomAngle(5, 15, 165);
+                    qText = "Ketik besar sudut yang ditunjukkan!";
+                    drawProtractor(ctx, cx, cy, radius, 0);
+                    drawAngleLines(ctx, cx, cy, radius-20, state.targetAngle, 0);
+                    
+                    document.getElementById('input-container').style.display = 'block';
+                    document.getElementById('angle-input').focus();
+                    break;
+
+                case 5: // Level 5: Busur diputar (PG)
+                    state.timer = 45;
+                    state.targetAngle = getRandomAngle(5, 30, 120);
+                    let rotation = Math.floor(Math.random() * 60) + 10; // Putar 10-70 derajat
+                    qText = "Perhatikan posisi nol! Berapa besar sudutnya?";
+                    drawProtractor(ctx, cx, cy-20, radius-20, rotation);
+                    drawAngleLines(ctx, cx, cy-20, radius-40, state.targetAngle, rotation);
+                    
+                    showMultipleChoice();
+                    break;
+
+                case 6: // Level 6: Challenge (Timer terus jalan)
+                    state.targetAngle = getRandomAngle(5, 10, 175);
+                    qText = "CEPAT! Berapa besar sudut ini?";
+                    
+                    // Randomize tampilan (kadang pakai busur, kadang miring, kadang tidak)
+                    let randType = Math.random();
+                    if(randType < 0.3) {
+                        drawAngleLines(ctx, cx, cy, radius, state.targetAngle, 0);
+                    } else if(randType < 0.6) {
+                        drawProtractor(ctx, cx, cy, radius, 0);
+                        drawAngleLines(ctx, cx, cy, radius-20, state.targetAngle, 0);
+                    } else {
+                        let rot = Math.floor(Math.random() * 45);
+                        drawProtractor(ctx, cx, cy-20, radius-20, rot);
+                        drawAngleLines(ctx, cx, cy-20, radius-40, state.targetAngle, rot);
+                    }
+                    showMultipleChoice();
+                    break;
+            }
+
+            document.getElementById('question-text').innerText = qText;
+            
+            // Progress Bar
+            let p = state.currentLevel===6 ? 100 : ((state.currentQuestion-1) / state.maxQuestions) * 100;
+            document.getElementById('progress-bar').style.width = `${p}%`;
+
+            if(state.currentLevel !== 6 || state.currentQuestion === 1) {
+                startTimer(); // Di level 6, timer tidak direset tiap soal
+            }
+        }
+
+        function showMultipleChoice() {
+            document.getElementById('options-container').style.display = 'grid';
+            let options = generateOptions(state.targetAngle);
+            for(let i=0; i<4; i++) {
+                let btn = document.getElementById(`opt-${i+1}`);
+                btn.innerText = `${options[i]}°`;
+                btn.value = options[i]; // simpan nilai int
+            }
+        }
+
+        /* --- PENILAIAN --- */
+        function checkAnswerLvl1(index) {
+            let ans = state.lvl1Angles[index];
+            processAnswer(ans === state.targetAngle);
+        }
+
+        function checkInputAnswer() {
+            let val = parseInt(document.getElementById('angle-input').value);
+            if(isNaN(val)) return;
+            processAnswer(val === state.targetAngle);
+        }
+
+        function checkAnswer(textValue) {
+            let val = parseInt(textValue.replace('°', ''));
+            processAnswer(val === state.targetAngle);
+        }
+
+        function processAnswer(isCorrect) {
+            state.isTimerActive = false;
+            
+            if(isCorrect) {
+                sound.correct();
+                state.combo++;
+                state.stats.correct++;
+                let points = 10 + (state.combo > 2 ? 20 : 0) + (state.timer > 10 ? 5 : 0);
+                state.score[state.currentPlayer] += points;
+                showFeedback(true);
+            } else {
+                sound.wrong();
+                state.combo = 0;
+                state.stats.wrong++;
+                state.lives--;
+                state.score[state.currentPlayer] -= 2;
+                if(state.score[state.currentPlayer] < 0) state.score[state.currentPlayer] = 0; // Tidak minus
+                
+                document.getElementById('play-screen').classList.add('shake');
+                setTimeout(()=> document.getElementById('play-screen').classList.remove('shake'), 400);
+                
+                updateHUD();
+                
+                if(state.lives <= 0) {
+                    gameOver();
+                    return;
+                }
+                showFeedback(false);
+            }
+            updateHUD();
+        }
+
+        function handleTimeOut() {
+            sound.wrong();
+            state.combo = 0;
+            state.lives--;
+            state.stats.wrong++;
+            updateHUD();
+            if(state.lives <= 0) {
+                gameOver();
+            } else {
+                showFeedback(false, "Waktu Habis!");
+            }
+        }
+
+        function showFeedback(isCorrect, customMsg = null) {
+            const modal = document.getElementById('feedback-modal');
+            const title = document.getElementById('feedback-title');
+            const msg = document.getElementById('feedback-message');
+            const tutorial = document.getElementById('feedback-tutorial');
+            
+            modal.style.display = 'block';
+            
+            if(isCorrect) {
+                title.innerText = "Benar! 🎉";
+                title.className = "feedback-title correct-text bounce";
+                let msgs = ["Kerja bagus!", "Tepat sekali!", "Kamu hebat mengukur sudut!", "Luar biasa!"];
+                msg.innerText = msgs[Math.floor(Math.random() * msgs.length)];
+                if(state.combo > 2) msg.innerText += ` COMBO x${state.combo} (+20 poin)`;
+                tutorial.classList.add('hidden');
+                
+                // Auto next untuk mode lancar
+                setTimeout(() => nextQuestion(), 1500);
+            } else {
+                title.innerText = "Kurang Tepat 😕";
+                title.className = "feedback-title wrong-text";
+                msg.innerText = customMsg || "Ayo kita pelajari lagi cara mengukurnya.";
+                tutorial.classList.remove('hidden');
+                document.getElementById('correct-ans-span').innerText = state.targetAngle;
+            }
+        }
+
+        function nextQuestion() {
+            document.getElementById('feedback-modal').style.display = 'none';
+            if(state.currentLevel === 6 && state.timer <= 0) {
+                levelComplete(); // Waktu habis di level 6 berarti selesai
+                return;
+            }
+            nextQuestionLogic();
+        }
+
+        function levelComplete() {
+            sound.levelUp();
+            clearInterval(state.timerInterval);
+            
+            if(state.currentLevel < 6) {
+                state.maxUnlockedLevel = Math.max(state.maxUnlockedLevel, state.currentLevel + 1);
+            }
+            
+            // Jika mode 1 pemain, atau pemain 2 sudah selesai, tampilkan peta
+            if (state.mode === 1) {
+                alert(`Level ${state.currentLevel} Selesai!\nSkor kamu: ${state.score[1]}`);
+                updateMapUI();
+                showScreen('map-screen');
+                if(state.currentLevel === 6) showEndGame(); // Tamat
+            } else {
+                // Mode 2 Pemain
+                alert(`Pemain ${state.currentPlayer} menyelesaikan Level ${state.currentLevel} dengan Skor ${state.score[state.currentPlayer]}`);
+                updateMapUI();
+                showScreen('map-screen');
+            }
+        }
+
+        function gameOver() {
+            clearInterval(state.timerInterval);
+            alert("Game Over! Nyawa kamu habis.");
+            if(state.mode === 1) {
+                showEndGame();
+            } else {
+                showEndGame(); // Langsung end game agar ganti pemain
+            }
+        }
+
+        /* ==================================================
+           AKHIR GAME & SERTIFIKAT
+           ================================================== */
+        function showEndGame() {
+            sound.win();
+            showScreen('end-screen');
+            
+            let total = state.stats.correct + state.stats.wrong;
+            let acc = total === 0 ? 0 : Math.round((state.stats.correct / total) * 100);
+            
+            document.getElementById('end-score').innerText = state.score[state.currentPlayer];
+            document.getElementById('end-correct').innerText = state.stats.correct;
+            document.getElementById('end-wrong').innerText = state.stats.wrong;
+            document.getElementById('end-accuracy').innerText = acc;
+            
+            let badge = "🥉 Ahli Sudut Pemula";
+            let pred = "Cukup";
+            if(acc >= 90) { badge = "👑 Raja Sudut"; pred = "Luar Biasa"; }
+            else if(acc >= 75) { badge = "🥇 Master Busur Derajat"; pred = "Sangat Bagus"; }
+            else if(acc >= 50) { badge = "🥈 Pengukur Hebat"; pred = "Bagus"; }
+            
+            document.getElementById('end-badge').innerText = badge;
+            document.getElementById('end-predicate').innerText = pred;
+
+            if (state.mode === 2 && state.currentPlayer === 1) {
+                document.getElementById('end-title').innerText = "Pemain 1 Selesai!";
+                document.getElementById('btn-next-player').style.display = 'inline-block';
+            } else if (state.mode === 2 && state.currentPlayer === 2) {
+                let winner = state.score[1] > state.score[2] ? "Pemain 1" : (state.score[2] > state.score[1] ? "Pemain 2" : "Seri!");
+                document.getElementById('end-title').innerText = `Permainan Selesai! Pemenang: ${winner}`;
+                document.getElementById('btn-next-player').style.display = 'none';
+            } else {
+                document.getElementById('end-title').innerText = "Game Selesai!";
+                document.getElementById('btn-next-player').style.display = 'none';
+            }
+
+            drawConfetti();
+        }
+
+        function switchPlayer() {
+            state.currentPlayer = 2;
+            resetPlayerStats();
+            document.getElementById('player-turn-text').innerText = "Giliran: Pemain 2";
+            updateMapUI();
+            showScreen('map-screen');
+        }
+
+        /* --- GENERATE SERTIFIKAT (CANVAS) --- */
+        function downloadCertificate() {
+            const certC = document.getElementById('certCanvas');
+            const cCtx = certC.getContext('2d');
+            
+            // Background
+            let gradient = cCtx.createLinearGradient(0,0,800,600);
+            gradient.addColorStop(0, "#fdfbfb");
+            gradient.addColorStop(1, "#ebedee");
+            cCtx.fillStyle = gradient;
+            cCtx.fillRect(0, 0, 800, 600);
+            
+            // Border
+            cCtx.strokeStyle = "#FFD700";
+            cCtx.lineWidth = 15;
+            cCtx.strokeRect(20, 20, 760, 560);
+            cCtx.strokeStyle = "#8B4513";
+            cCtx.lineWidth = 5;
+            cCtx.strokeRect(30, 30, 740, 540);
+
+            // Teks
+            cCtx.textAlign = "center";
+            cCtx.fillStyle = "#333";
+            
+            cCtx.font = "bold 40px 'Segoe UI', Arial";
+            cCtx.fillText("SERTIFIKAT PENGHARGAAN", 400, 100);
+            
+            cCtx.font = "20px 'Segoe UI', Arial";
+            cCtx.fillText("Diberikan kepada:", 400, 180);
+            
+            cCtx.font = "bold 50px 'Segoe UI', Arial";
+            cCtx.fillStyle = "#008CBA";
+            let playerName = prompt("Masukkan nama kamu untuk sertifikat:", "Siswa Hebat");
+            if(!playerName) playerName = "Penjelajah Sudut";
+            cCtx.fillText(playerName, 400, 250);
+            
+            cCtx.fillStyle = "#333";
+            cCtx.font = "25px 'Segoe UI', Arial";
+            cCtx.fillText("Telah berhasil menyelesaikan tantangan game edukasi", 400, 320);
+            cCtx.font = "bold 30px 'Segoe UI', Arial";
+            cCtx.fillText("\"Petualangan Penjelajah Sudut\"", 400, 360);
+            
+            cCtx.font = "20px Arial";
+            cCtx.fillText(`Skor Akhir: ${state.score[state.currentPlayer]}`, 400, 420);
+            cCtx.fillText(`Predikat: ${document.getElementById('end-badge').innerText}`, 400, 460);
+            
+            // Tanggal
+            cCtx.font = "italic 18px Arial";
+            let tgl = new Date().toLocaleDateString('id-ID');
+            cCtx.fillText(`Diterbitkan pada: ${tgl}`, 400, 520);
+
+            // Download
+            let link = document.createElement('a');
+            link.download = `Sertifikat_${playerName}.png`;
+            link.href = certC.toDataURL('image/png');
+            link.click();
+        }
+
+        /* --- EFEK CONFETTI --- */
+        function drawConfetti() {
+            let particles = [];
+            for(let i=0; i<100; i++) {
+                particles.push({
+                    x: Math.random() * window.innerWidth,
+                    y: Math.random() * window.innerHeight - window.innerHeight,
+                    vx: Math.random() * 4 - 2,
+                    vy: Math.random() * 5 + 2,
+                    color: ['#f44336', '#e91e63', '#9c27b0', '#3f51b5', '#2196f3', '#4caf50', '#ffeb3b', '#ff9800'][Math.floor(Math.random()*8)],
+                    size: Math.random() * 10 + 5
+                });
+            }
+            
+            let confCanvas = document.createElement('canvas');
+            confCanvas.style.position = 'absolute';
+            confCanvas.style.top = '0';
+            confCanvas.style.left = '0';
+            confCanvas.style.pointerEvents = 'none';
+            confCanvas.style.zIndex = '999';
+            confCanvas.width = window.innerWidth;
+            confCanvas.height = window.innerHeight;
+            document.body.appendChild(confCanvas);
+            let cx = confCanvas.getContext('2d');
+
+            function render() {
+                cx.clearRect(0,0,confCanvas.width,confCanvas.height);
+                let active = false;
+                particles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    if(p.y < confCanvas.height) active = true;
+                    cx.fillStyle = p.color;
+                    cx.fillRect(p.x, p.y, p.size, p.size);
+                });
+                if(active && document.getElementById('end-screen').className.indexOf('hidden') === -1) {
+                    requestAnimationFrame(render);
+                } else {
+                    confCanvas.remove();
+                }
+            }
+            render();
+        }
+
+        // Tampilkan Menu di awal
+        window.onload = () => {
+            showScreen('menu-screen');
+        };
+
+    </script>
+</body>
+</html>
